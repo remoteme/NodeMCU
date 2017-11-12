@@ -9,7 +9,6 @@ const int port = 8082;
 #include <HardwareSerial.h>
 
 
-
 RemoteMe::RemoteMe(char * token, uint16_t deviceId ) {
 	this->token = std::move(token);
 	this->deviceId = deviceId;
@@ -121,38 +120,72 @@ void RemoteMe::stupidPrint() {
 	Serial.print("parr");
 }
 
-uint16_t RemoteMe::putArray(uint8_t* data, uint16_t pos, const uint8_t* arrayT, uint16_t length) {
 
-//	for (int i = 0; i < length; i++) {
-//		data[pos + i] = arrayT[i];//memcpy didnt work
-//	}
-	
+uint16_t RemoteMe::putString(uint8_t* data, uint16_t pos, String string ) {
+	const uint8_t* dataString = reinterpret_cast<const uint8_t*>(&string[0]);
+	pos = putArray(data, pos, dataString, string.length());
+	data[pos] = 0;
+	return pos + 1;
+
+}
+uint16_t RemoteMe::putArray(uint8_t* data, uint16_t pos, const void* arrayT, uint16_t length) {
+
 	memcpy(&data[pos], arrayT, length);
 
-
-	
-	
 	return pos + length;
 }
 
 uint16_t RemoteMe::putByte(uint8_t* data, uint16_t pos, uint8_t number) {
-	data[pos] = number>>8 & 0xFF;
-	return pos + sizeof(number);
+	data[pos] = number;
+
+	return pos + 1;
 }
 
 uint16_t RemoteMe::putShort(uint8_t* data, uint16_t pos, uint16_t number ) {
-	data[pos + 1] = number & 0xFF;
-	data[pos] = number >> 8 & 0xFF;
-	return pos + sizeof(number);
+	return putBigEndian(data, pos, &number, sizeof(uint16_t));
+}
+
+uint16_t RemoteMe::putLong(uint8_t* data, uint16_t pos, uint64_t number) {
+	return putBigEndian(data, pos, &number, sizeof(uint64_t));
+}
+
+
+uint8_t* RemoteMe::getReverseBytes(void* start, uint16_t size) {
+	uint8_t* ret = new uint8_t[size];
+
+	for (uint8_t i = 0; i < size; i++) {
+		ret[i] =((uint8_t*) start)[size - i - 1];
+	
+	}
+
+
+	return ret;
+}
+
+uint16_t RemoteMe::putBigEndian(uint8_t* data, uint16_t pos, void* value, uint16_t size) {
+	return putArray(data, pos, getReverseBytes(value, size), size);
+}
+
+uint16_t RemoteMe::putDouble(uint8_t* data, uint16_t pos, double value) {
+	return putBigEndian(data,pos,& value,sizeof(double));
 }
 
 void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16_t receiverDeviceId, uint16_t messageId, const uint8_t *payload, uint16_t length) {
 	sendUserMessage(renevalWhenFailType, receiverDeviceId, deviceId, messageId, payload, length);
 }
 
+void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16_t receiverDeviceId, uint16_t messageId, String message) {
+	this->sendUserMessage(renevalWhenFailType, receiverDeviceId, deviceId, messageId, message);
+}
+
+void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16_t receiverDeviceId, uint16_t senderDeviceId, uint16_t messageId, String message) {
+
+	const uint8_t* data = reinterpret_cast<const uint8_t*>(&message[0]);
+	sendUserMessage(renevalWhenFailType, receiverDeviceId, senderDeviceId, messageId, data, message.length());
+}
 void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16_t receiverDeviceId, uint16_t senderDeviceId, uint16_t messageId, const uint8_t *payload, uint16_t length) {
-	uint16_t size = 11 + length;
-	uint8_t* data = new uint8_t[size];
+	uint16_t size = 7 + length;
+	uint8_t* data = new uint8_t[size+4];
 	
 
 	uint8_t index = 0;
@@ -170,22 +203,103 @@ void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16
 	index = putArray(data, index, payload,length);
 
 	
-	send(data, size);
+	send(data, size+4);
 
 }
-void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16_t receiverDeviceId , uint16_t messageId, String message) {
-	this->sendUserMessage(renevalWhenFailType, receiverDeviceId, deviceId, messageId, message);
+
+void RemoteMe::sendAddDataMessage(uint16_t seriesId, AddDataMessageSetting settings, uint64_t time, double value)
+{
+	uint16_t size = 11+sizeof(double) ;
+	uint8_t* data = new uint8_t[size+4];
+
+
+	uint8_t index = 0;
+
+
+	index = putShort(data, index, ADD_DATA);
+	index = putShort(data, index, size);
+
+	index = putShort(data, index, seriesId);
+	index = putByte(data, index, settings);
+	index = putLong(data, index, time);
+	index = putDouble(data, index, value);
+
+
+
+
+	send(data, size+4);
 }
 
-void RemoteMe::sendUserMessage(WSUserMessageSettings renevalWhenFailType, uint16_t receiverDeviceId, uint16_t senderDeviceId, uint16_t messageId, String message) {
-
-	const uint8_t* data = reinterpret_cast<const uint8_t*>(&message[0]);
-	sendUserMessage(renevalWhenFailType, receiverDeviceId, senderDeviceId, messageId, data, message.length());
-}
 
 void RemoteMe::send(uint8_t * payload, size_t length) {
 	
 	webSocket->sendBIN(payload, length);
+}
+
+
+void  RemoteMe::sendRegisterDeviceMessage(uint16_t deviceId, String deviceName, DeviceType deviceType) {
+	uint16_t size = 4 + deviceName.length();//4 short byte + 1 for 0 for string
+	uint8_t* data = new uint8_t[size + 4];
+
+
+	uint8_t index = 0;
+
+
+	index = putShort(data, index, REGISTER_DEVICE);
+	index = putShort(data, index, size);
+
+	index = putShort(data, index, deviceId);
+	index = putString(data, index, deviceName);
+	index = putByte(data, index, deviceType);
+	
+
+
+
+
+	send(data, size + 4);
+
+}
+
+void RemoteMe::sendRegisterDeviceMessage(String deviceName ) {
+	sendRegisterDeviceMessage(deviceId, deviceName, NETWORK);
+}
+
+void RemoteMe::sendRegisterDeviceMessage() {
+	sendRegisterDeviceMessage("");
+}
+
+
+void RemoteMe::sendRegisterChildDeviceMessage(uint16_t parentDeviceId, uint16_t deviceId, String deviceName) {
+	uint16_t size = 5 + deviceName.length();//4 short  + 1 for 0 for string
+	uint8_t* data = new uint8_t[size + 4];
+
+
+	uint8_t index = 0;
+
+
+	index = putShort(data, index, REGISTER_CHILD_DEVICE);
+	index = putShort(data, index, size);
+
+	index = putShort(data, index, parentDeviceId);
+	index = putShort(data, index, deviceId);
+	index = putString(data, index, deviceName);
+
+
+
+	send(data, size + 4);
+}
+void RemoteMe::sendRegisterChildDeviceMessage(uint16_t deviceId, String deviceName) {
+	sendRegisterChildDeviceMessage(this->deviceId,deviceId, "");
+}
+void RemoteMe::sendRegisterChildDeviceMessage(uint16_t deviceId) {
+	sendRegisterChildDeviceMessage(deviceId, "");
+}
+
+
+
+
+void RemoteMe::sendLogMessage(String str) {
+
 }
 
 
@@ -199,6 +313,7 @@ void RemoteMe::waitForConnect() {
 	Serial.println(millis());
 
 }
+
 void RemoteMe::loop() {
 
 		static unsigned long firstTimeFail = 0;

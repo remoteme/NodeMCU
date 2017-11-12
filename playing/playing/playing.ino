@@ -44,9 +44,23 @@ void setup() {
 	Serial.print("setup end");
 }
 
+
+
+
 void loop() {
+	double static value = 0.32;
 	remoteMe.loop();
-	remoteMe.sendUserMessage(NO_RENEWAL,123,32,"maciek sajdak");
+	//remoteMe.sendAddDataMessage(12345, NO_ROUND, 12345678901l, value);
+											
+//	remoteMe.sendUserMessage(NO_RENEWAL,123,32,"maciek sajdak");
+
+	//remoteMe.sendRegisterChildDeviceMessage(345,5678,"maciek sajdak");
+
+	remoteMe.sendLogMessage(" maciek  %d asdad %d sdfsdf", 1, 23);
+
+	value += 1.23;
+
+	Serial.println(sizeof(double));
 
 	//remoteMe.sendExamplePost();
 	//delay(500);	

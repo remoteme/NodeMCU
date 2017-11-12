@@ -9,4 +9,7 @@ enum WSUserMessageSettings { NO_RENEWAL=0, RENEWAL_IF_FAILED=1};
 
 enum MessageType { USER_MESSAGE = 100, USER_MESSAGE_DELIVER_STATUS = 101, REGISTER_DEVICE = 200, REGISTER_CHILD_DEVICE = 201, ADD_DATA = 300 };
 
+enum AddDataMessageSetting { NO_ROUND = 0, _1S = 1, _2S = 2, _5S = 3, _10S = 4, _15S = 5, _20S = 6, _30S = 7 };
+enum DeviceType{NETWORK=1, SMARTPHONE=2, WEBPAGE=3, SCRIPT=4};
+
 #endif
